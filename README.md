@@ -697,41 +697,6 @@ curl http://localhost:8003/api/v1/pengiriman     # SLS - MongoDB
 # RabbitMQ Management UI
 open http://localhost:15672  # admin / admin123
 ```
-
----
-
-## Alur Integrasi End-to-End
-
-```
-[Customer]
-  │
-  ▼ POST /api/pesanan (via API Gateway :8080)
-[OMS :8001 — PostgreSQL]
-    │ INSERT orders table
-    │ PUBLISH → order.created → logistics.events (RabbitMQ)
-    │
-    ├──────────────────────────────────────┐
-    │                                      │
-    ▼ q.wms.incoming                       ▼ q.ctn.aggregator
-[Transformer] ─── JSON→XML ──→ [WMS :8002 — MySQL]
-                                    │ UPDATE inventory
-                                    │ INSERT warehouse_requests
-                                    │ PUBLISH → warehouse.packed
-                                    │
-                            ┌───────┴──────────────┐
-                            │                      │
-                            ▼ q.sls.incoming        ▼ q.ctn.aggregator
-                      [SLS :8003 — MongoDB]   [CTN :8004 — Redis]
-                            │ INSERT shipments       │ Aggregate timeline
-                            │ PUBLISH → shipment.manifested
-                            │                      │
-                            └──────────────────────┘
-                                                   │
-                            [Customer] ← GET /api/tracking/:id
-```
-
----
-
 ## Reliable Messaging
 
 ### Dead Letter Queue (DLQ)
