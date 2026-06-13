@@ -1,0 +1,206 @@
+openapi: 3.0.3
+info:
+  title: WMS - Warehouse Management System
+  version: 1.0.0
+  description: |
+    Menerima permintaan alokasi stok dalam format **XML** dari Transformer OMS-WMS.
+    Setelah alokasi berhasil, mempublikasikan event `gudang.dikemas` ke RabbitMQ.
+servers:
+  - url: http://localhost:8002
+    description: Direct (development)
+  - url: http://localhost:8080/api/gudang
+    description: Via API Gateway (prefix /api/gudang → /api/v1)
+tags:
+  - name: Alokasi
+    description: Endpoint penerimaan permintaan dari Transformer (XML)
+  - name: Query
+    description: Endpoint baca data gudang
+  - name: Monitoring
+    description: Health check & statistik
+
+paths:
+  /health:
+    get:
+      tags: [Monitoring]
+      summary: Health check WMS
+      responses:
+        '200':
+          description: Service aktif
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HealthResponse' }
+              example: { status: AKTIF, layanan: WMS }
+
+  /api/v1/statistik:
+    get:
+      tags: [Monitoring]
+      summary: Statistik gudang
+      responses:
+        '200':
+          description: Statistik berhasil diambil
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StatistikWMS' }
+              example:
+                total_permintaan: 10
+                total_dikemas: 8
+                total_sku: 5
+
+  /api/v1/alokasi:
+    post:
+      tags: [Alokasi]
+      summary: Terima permintaan alokasi (XML)
+      description: |
+        Dipanggil oleh **Transformer OMS-WMS** saat ada pesanan baru.
+        Request body harus dalam format **XML** (Content-Type: application/xml).
+
+        Alur:
+        1. Parse XML → ekstrak referensi pesanan & daftar barang
+        2. Cek idempotency (skip jika sudah `DIKEMAS`)
+        3. Update inventaris & status di MySQL
+        4. Publish event `gudang.dikemas` ke RabbitMQ
+
+        > ⚠️ Endpoint ini dipanggil internal oleh Transformer, bukan oleh frontend/API Gateway langsung.
+      requestBody:
+        required: true
+        content:
+          application/xml:
+            schema:
+              type: string
+              description: XML payload permintaan alokasi gudang
+            example: |
+              <?xml version="1.0" encoding="UTF-8"?>
+              <permintaan_gudang>
+                <id>WMS-REQ-00123</id>
+                <referensi_pesanan>PSN-20260613-A1B2C3</referensi_pesanan>
+                <aksi>ALOKASI_DAN_KEMAS</aksi>
+                <id_pesan>abc123-uuid</id_pesan>
+                <lokasi_pengambilan>Gudang Jakarta Utara</lokasi_pengambilan>
+                <alamat_tujuan>Jl. Sudirman No. 12, Jakarta Selatan</alamat_tujuan>
+                <daftar_barang>
+                  <barang>
+                    <kode_sku>SKU-NEON-01</kode_sku>
+                    <jumlah>2</jumlah>
+                  </barang>
+                </daftar_barang>
+              </permintaan_gudang>
+      responses:
+        '200':
+          description: Alokasi berhasil (atau idempoten)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AlokasiResponse' }
+        '400':
+          description: XML tidak valid atau field wajib hilang
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /api/v1/permintaan:
+    get:
+      tags: [Query]
+      summary: Daftar semua permintaan gudang
+      responses:
+        '200':
+          description: Daftar permintaan gudang dari MySQL
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/PermintaanGudang' }
+
+  /api/v1/inventaris:
+    get:
+      tags: [Query]
+      summary: Daftar inventaris (stok)
+      responses:
+        '200':
+          description: Daftar SKU dan stok
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Inventaris' }
+
+  /api/v1/requests:
+    get:
+      tags: [Query]
+      summary: "Alias: Daftar permintaan (backward compat)"
+      responses:
+        '200':
+          description: Sama dengan /api/v1/permintaan
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/PermintaanGudang' }
+
+  /api/v1/inventory:
+    get:
+      tags: [Query]
+      summary: "Alias: Inventaris (backward compat)"
+      responses:
+        '200':
+          description: Sama dengan /api/v1/inventaris
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Inventaris' }
+
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      properties:
+        status: { type: string }
+        layanan: { type: string }
+
+    ErrorResponse:
+      type: object
+      properties:
+        detail: { type: string }
+
+    StatistikWMS:
+      type: object
+      properties:
+        total_permintaan: { type: integer }
+        total_dikemas: { type: integer }
+        total_sku: { type: integer }
+
+    AlokasiResponse:
+      type: object
+      properties:
+        status: { type: string, example: DIKEMAS }
+        id_permintaan: { type: string, example: WMS-REQ-00123 }
+        referensi_pesanan: { type: string, example: PSN-20260613-A1B2C3 }
+        idempoten: { type: boolean, example: false }
+
+    PermintaanGudang:
+      type: object
+      properties:
+        id_permintaan: { type: string }
+        referensi_pesanan: { type: string }
+        aksi: { type: string }
+        daftar_barang: { type: string, description: JSON string }
+        lokasi_pengambilan: { type: string }
+        alamat_tujuan: { type: string }
+        status: { type: string, enum: [DIPROSES, DIKEMAS] }
+        dibuat_pada: { type: string, format: date-time }
+
+    Inventaris:
+      type: object
+      properties:
+        kode_sku: { type: string, example: SKU-NEON-01 }
+        nama_produk: { type: string }
+        jumlah_tersedia: { type: integer }
+        jumlah_dialokasikan: { type: integer }
+
+  responses:
+    ServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }

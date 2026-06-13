@@ -1,0 +1,1376 @@
+{
+  "info": {
+    "_postman_id": "2d643777-d7a8-4b03-a10d-e29e80a5a642",
+    "name": "EDLIE — Enterprise Logistics Integration Engine",
+    "description": "Collection lengkap untuk testing EDLIE (OMS, WMS, SLS, CTN) via API Gateway.\n\nSetup:\n1. `docker compose up --build -d`\n2. Tunggu ~60 detik sampai semua service healthy\n3. Import collection ini ke Postman\n4. Set variable `base_url` = http://localhost:8080\n\nVariable `order_id` dan `shipment_id` diisi otomatis oleh test scripts.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8080",
+      "type": "string"
+    },
+    {
+      "key": "order_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "shipment_id",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "🔍 Health Checks",
+      "description": "Verifikasi semua service running.",
+      "item": [
+        {
+          "name": "Gateway",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/health",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "health"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Gateway aktif\", () => pm.response.to.have.status(200));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "OMS",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/health/oms",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "health",
+                "oms"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"OMS aktif\", () => pm.response.to.have.status(200));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "WMS",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/health/wms",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "health",
+                "wms"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"WMS aktif\", () => pm.response.to.have.status(200));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "SLS",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/health/sls",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "health",
+                "sls"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"SLS aktif\", () => pm.response.to.have.status(200));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "CTN",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/health/ctn",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "health",
+                "ctn"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"CTN aktif\", () => pm.response.to.have.status(200));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "📦 OMS — Order Management",
+      "description": "Buat dan kelola pesanan.",
+      "item": [
+        {
+          "name": "Buat Pesanan Baru",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/pesanan",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "pesanan"
+              ]
+            },
+            "description": "Membuat pesanan baru. Menyimpan `order_id` ke collection variable secara otomatis.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pelanggan\": {\n    \"nama\": \"Jane Doe\",\n    \"email\": \"jane.doe@email.com\"\n  },\n  \"daftarBarang\": [\n    {\n      \"sku\": \"SKU-NEON-01\",\n      \"qty\": 2\n    },\n    {\n      \"sku\": \"SKU-NEON-02\",\n      \"qty\": 1\n    }\n  ],\n  \"totalHarga\": 450000,\n  \"lokasi_pengambilan\": \"Gudang Jakarta Utara\",\n  \"alamat_tujuan\": \"Jl. Sudirman No. 12, Jakarta Selatan\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"201 Created\", () => pm.response.to.have.status(201));",
+                  "pm.test(\"Ada id_pesanan\", () => {",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.id_pesanan).to.be.a(\"string\");",
+                  "  pm.collectionVariables.set(\"order_id\", body.id_pesanan);",
+                  "  console.log(\"order_id:\", body.id_pesanan);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Buat Pesanan — Validasi Gagal",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/pesanan",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "pesanan"
+              ]
+            },
+            "description": "Verifikasi validasi input. Field wajib hilang → harus 400.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pelanggan\": {\n    \"nama\": \"Test\"\n  },\n  \"daftarBarang\": [],\n  \"totalHarga\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Harus 400\", () => pm.response.to.have.status(400));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Daftar Semua Pesanan",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/pesanan",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "pesanan"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Ada daftar_pesanan\", () => pm.expect(pm.response.json()).to.have.property(\"daftar_pesanan\"));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Detail Pesanan by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/pesanan/{order_id}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "pesanan",
+                "{order_id}"
+              ]
+            },
+            "description": "Gunakan setelah 'Buat Pesanan Baru'."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"ID cocok\", () => {",
+                  "  pm.expect(pm.response.json().id_pesanan).to.equal(pm.collectionVariables.get(\"order_id\"));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Statistik OMS",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/statistik",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "statistik"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Ada total_pesanan\", () => pm.expect(pm.response.json()).to.have.property(\"total_pesanan\"));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "🏭 WMS — Warehouse Management",
+      "description": "Permintaan gudang, inventaris, dan alokasi stok.",
+      "item": [
+        {
+          "name": "Daftar Permintaan Gudang",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/gudang/permintaan",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "gudang",
+                "permintaan"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Daftar Inventaris (Stok)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/gudang/inventaris",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "gudang",
+                "inventaris"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Array inventaris\", () => pm.expect(pm.response.json()).to.be.an(\"array\"));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Statistik WMS",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/gudang/statistik",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "gudang",
+                "statistik"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Alokasi Manual (XML) — Langsung WMS:8002",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/xml"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:8002/api/v1/alokasi",
+              "protocol": "http",
+              "host": [
+                "localhost:8002"
+              ],
+              "port": "8002",
+              "path": [
+                "api",
+                "v1",
+                "alokasi"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<permintaan_gudang>\n  <id>WMS-REQ-MANUAL-01</id>\n  <referensi_pesanan>{{order_id}}</referensi_pesanan>\n  <aksi>ALOKASI_DAN_KEMAS</aksi>\n  <id_pesan>manual-test-uuid-001</id_pesan>\n  <lokasi_pengambilan>Gudang Jakarta Utara</lokasi_pengambilan>\n  <alamat_tujuan>Jl. Sudirman No. 12, Jakarta Selatan</alamat_tujuan>\n  <daftar_barang>\n    <barang>\n      <kode_sku>SKU-NEON-01</kode_sku>\n      <jumlah>1</jumlah>\n    </barang>\n  </daftar_barang>\n</permintaan_gudang>",
+              "options": {
+                "raw": {
+                  "language": "xml"
+                }
+              }
+            },
+            "description": "⚠️ Bypass API Gateway — langsung ke WMS:8002. Normalnya dipanggil internal oleh Transformer. Gunakan untuk debugging."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "🚚 SLS — Shipping & Logistics",
+      "description": "Kelola status pengiriman.",
+      "item": [
+        {
+          "name": "Daftar Semua Pengiriman",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/pengiriman",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "pengiriman"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"Ada daftar_pengiriman\", () => pm.expect(body).to.have.property(\"daftar_pengiriman\"));",
+                  "if (body.daftar_pengiriman && body.daftar_pengiriman.length > 0) {",
+                  "  pm.collectionVariables.set(\"shipment_id\", body.daftar_pengiriman[0].id_pengiriman);",
+                  "  console.log(\"shipment_id:\", body.daftar_pengiriman[0].id_pengiriman);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cari Pengiriman by ID Pesanan",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/pengiriman/{order_id}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "pengiriman",
+                "{order_id}"
+              ]
+            },
+            "description": "Cari pengiriman menggunakan order_id dari OMS. Tunggu ~5 detik setelah buat pesanan."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"200 atau 404\", () => pm.expect(pm.response.code).to.be.oneOf([200, 404]));",
+                  "if (pm.response.code === 200) {",
+                  "  const sid = pm.response.json().id_pengiriman;",
+                  "  pm.collectionVariables.set(\"shipment_id\", sid);",
+                  "  console.log(\"shipment_id:\", sid);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Status → PICKUP",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/pengiriman/{shipment_id}/status",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "pengiriman",
+                "{shipment_id}",
+                "status"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"PICKUP\",\n  \"operator\": \"Operator Test\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Status PICKUP\", () => pm.expect(pm.response.json().pengiriman.status).to.equal(\"PICKUP\"));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Status → IN TRANSIT",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/pengiriman/{shipment_id}/status",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "pengiriman",
+                "{shipment_id}",
+                "status"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"IN TRANSIT\",\n  \"operator\": \"Operator Test\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Status → DELIVERED",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/pengiriman/{shipment_id}/status",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "pengiriman",
+                "{shipment_id}",
+                "status"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"DELIVERED\",\n  \"operator\": \"Operator Test\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Status → CANCELLED (alternatif)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/pengiriman/{shipment_id}/status",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "pengiriman",
+                "{shipment_id}",
+                "status"
+              ]
+            },
+            "description": "⚠️ Batalkan pengiriman. Jangan run bersamaan dengan DELIVERED.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"CANCELLED\",\n  \"operator\": \"Operator Test\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Set Jadwal Pickup",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/pengiriman/{shipment_id}/jadwal",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "pengiriman",
+                "{shipment_id}",
+                "jadwal"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"scheduled_pickup_date\": \"2026-06-15T08:00:00.000Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Statistik SLS",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/sls/statistik",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "sls",
+                "statistik"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Waktu Server SLS",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/sls/server-time",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "sls",
+                "server-time"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Ada server_time\", () => pm.expect(pm.response.json()).to.have.property(\"server_time\"));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "📍 CTN — Customer Tracking",
+      "description": "Timeline pelacakan pesanan end-to-end.",
+      "item": [
+        {
+          "name": "Pelacakan by ID Pesanan",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/tracking/{order_id}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tracking",
+                "{order_id}"
+              ]
+            },
+            "description": "Cek status & timeline pelacakan. Tunggu ~5-10 detik setelah buat pesanan."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"200 atau 404\", () => pm.expect(pm.response.code).to.be.oneOf([200, 404]));",
+                  "if (pm.response.code === 200) {",
+                  "  pm.test(\"Ada timeline\", () => pm.expect(pm.response.json()).to.have.property(\"timeline\"));",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Timeline Saja",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/tracking/{order_id}/timeline",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tracking",
+                "{order_id}",
+                "timeline"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"200 atau 404\", () => pm.expect(pm.response.code).to.be.oneOf([200, 404]));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Semua Pesanan Terlacak",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/pelacakan",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "pelacakan"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Ada daftar_pesanan\", () => pm.expect(pm.response.json()).to.have.property(\"daftar_pesanan\"));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "🔄 End-to-End Flow",
+      "description": "Jalankan berurutan untuk test integrasi penuh OMS → WMS → SLS → CTN.\n\n⏳ Tunggu ~5-10 detik antara Step 2 dan Step 3.",
+      "item": [
+        {
+          "name": "[1] Buat Pesanan (OMS)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/pesanan",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "pesanan"
+              ]
+            },
+            "description": "Step 1: Buat pesanan baru. Simpan order_id.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pelanggan\": {\n    \"nama\": \"E2E Tester\",\n    \"email\": \"e2e@test.com\"\n  },\n  \"daftarBarang\": [\n    {\n      \"sku\": \"SKU-NEON-01\",\n      \"qty\": 1\n    }\n  ],\n  \"totalHarga\": 200000,\n  \"lokasi_pengambilan\": \"Gudang Jakarta Utara\",\n  \"alamat_tujuan\": \"Jl. Thamrin No. 5, Jakarta Pusat\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"201 Created\", () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set(\"order_id\", pm.response.json().id_pesanan);",
+                  "console.log(\"[E2E] Step 1 done — order_id:\", pm.collectionVariables.get(\"order_id\"));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "[2] Cek WMS — Inventaris Terupdate",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/gudang/inventaris",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "gudang",
+                "inventaris"
+              ]
+            },
+            "description": "Step 2: Verifikasi WMS sudah menerima event. Tunggu ~3 detik."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "console.log(\"[E2E] Step 2 done — WMS inventaris OK\");"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "[3] Cari Pengiriman di SLS",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/pengiriman/{order_id}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "pengiriman",
+                "{order_id}"
+              ]
+            },
+            "description": "Step 3: Cek SLS. Tunggu ~5 detik setelah step 1."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Pengiriman ditemukan\", () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set(\"shipment_id\", pm.response.json().id_pengiriman);",
+                  "console.log(\"[E2E] Step 3 done — shipment_id:\", pm.collectionVariables.get(\"shipment_id\"));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "[4] Update → PICKUP",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/pengiriman/{shipment_id}/status",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "pengiriman",
+                "{shipment_id}",
+                "status"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"PICKUP\",\n  \"operator\": \"E2E Test\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "console.log(\"[E2E] Step 4 done — PICKUP\");"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "[5] Update → IN TRANSIT",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/pengiriman/{shipment_id}/status",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "pengiriman",
+                "{shipment_id}",
+                "status"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"IN TRANSIT\",\n  \"operator\": \"E2E Test\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "console.log(\"[E2E] Step 5 done — IN TRANSIT\");"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "[6] Update → DELIVERED",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/pengiriman/{shipment_id}/status",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "pengiriman",
+                "{shipment_id}",
+                "status"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"DELIVERED\",\n  \"operator\": \"E2E Test\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "console.log(\"[E2E] Step 6 done — DELIVERED\");"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "[7] Verifikasi Tracking di CTN",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/tracking/{order_id}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tracking",
+                "{order_id}"
+              ]
+            },
+            "description": "Step 7: Verifikasi akhir. CTN harus punya timeline lengkap dari OMS → WMS → SLS."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"Ada timeline\", () => pm.expect(body.timeline).to.be.an(\"array\").with.length.greaterThan(0));",
+                  "pm.test(\"Min 4 events\", () => pm.expect(body.total_event).to.be.at.least(4));",
+                  "console.log(\"[E2E] SELESAI — total events:\", body.total_event, \"| status:\", body.status_terkini?.status);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

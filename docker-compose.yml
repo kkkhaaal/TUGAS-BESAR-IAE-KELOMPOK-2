@@ -1,0 +1,232 @@
+services:
+  # =============================================
+  # INFRASTRUKTUR
+  # =============================================
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: edlie-rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS}
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  db-oms:
+    image: postgres:15-alpine
+    container_name: edlie-db-oms
+    environment:
+      POSTGRES_USER: ${OMS_DB_USER}
+      POSTGRES_PASSWORD: ${OMS_DB_PASS}
+      POSTGRES_DB: oms_db
+    volumes:
+      - oms_data:/var/lib/postgresql/data
+      - ./apps/oms/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${OMS_DB_USER} -d oms_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  db-wms:
+    image: mysql:8.0
+    container_name: edlie-db-wms
+    environment:
+      MYSQL_ROOT_PASSWORD: ${WMS_DB_ROOT_PASS}
+      MYSQL_USER: ${WMS_DB_USER}
+      MYSQL_PASSWORD: ${WMS_DB_PASS}
+      MYSQL_DATABASE: wms_db
+    volumes:
+      - wms_data:/var/lib/mysql
+      - ./apps/wms/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  db-sls:
+    image: mongo:6.0
+    container_name: edlie-db-sls
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${SLS_DB_USER}
+      MONGO_INITDB_ROOT_PASSWORD: ${SLS_DB_PASS}
+      MONGO_INITDB_DATABASE: sls_db
+    volumes:
+      - sls_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      start_period: 30s
+      retries: 5
+    restart: unless-stopped
+
+  db-ctn:
+    image: redis:7-alpine
+    container_name: edlie-db-ctn
+    command: redis-server --appendonly yes
+    volumes:
+      - ctn_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # =============================================
+  # APLIKASI ENTERPRISE
+  # =============================================
+  oms-app:
+    build: ./apps/oms
+    container_name: edlie-oms-app
+    ports:
+      - "8001:8001"
+    depends_on:
+      db-oms:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://${OMS_DB_USER}:${OMS_DB_PASS}@db-oms:5432/oms_db
+      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672
+      PORT: 8001
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8001/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  wms-app:
+    build: ./apps/wms
+    container_name: edlie-wms-app
+    ports:
+      - "8002:8002"
+    depends_on:
+      db-wms:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      MYSQL_URL: mysql+pymysql://${WMS_DB_USER}:${WMS_DB_PASS}@db-wms:3306/wms_db
+      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672
+      WAREHOUSE_ID: ${WAREHOUSE_ID:-WH-JAKARTA-01}
+      PORT: 8002
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8002/health').read()\""]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  sls-app:
+    build: ./apps/sls
+    container_name: edlie-sls-app
+    ports:
+      - "8003:8003"
+    depends_on:
+      db-sls:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      MONGO_URL: mongodb://${SLS_DB_USER}:${SLS_DB_PASS}@db-sls:27017/sls_db?authSource=admin
+      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672
+      PORT: 8003
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8003/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  ctn-app:
+    build: ./apps/ctn
+    container_name: edlie-ctn-app
+    ports:
+      - "8004:8004"
+    depends_on:
+      db-ctn:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      REDIS_URL: redis://db-ctn:6379
+      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672
+      PORT: 8004
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8004/health').read()\""]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # =============================================
+  # LAPISAN INTEGRASI (EIP)
+  # =============================================
+  transformer-oms-wms:
+    build: ./integration-services/transformer-oms-wms
+    container_name: edlie-transformer-oms-wms
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      wms-app:
+        condition: service_healthy
+    environment:
+      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672
+      WMS_API_URL: http://wms-app:8002/api/v1/alokasi
+      TRANSFORMER_MAX_RETRIES: ${TRANSFORMER_MAX_RETRIES:-3}
+    restart: unless-stopped
+
+  api-gateway:
+    build: ./integration-services/api-gateway
+    container_name: edlie-api-gateway
+    ports:
+      - "8080:8080"
+    depends_on:
+      oms-app:
+        condition: service_healthy
+      wms-app:
+        condition: service_healthy
+      sls-app:
+        condition: service_healthy
+      ctn-app:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # =============================================
+  # FRONTEND DASHBOARD
+  # =============================================
+  dashboard:
+    build:
+      context: ./apps/dashboard
+      dockerfile: Dockerfile
+    container_name: edlie-dashboard
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./apps/dashboard/nginx.conf:/etc/nginx/nginx.conf:ro
+    restart: unless-stopped
+
+volumes:
+  rabbitmq_data:
+  oms_data:
+  wms_data:
+  sls_data:
+  ctn_data:
+
+networks:
+  default:
+    name: edlie-network

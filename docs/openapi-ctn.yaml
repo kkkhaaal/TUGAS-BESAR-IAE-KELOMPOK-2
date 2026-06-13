@@ -1,0 +1,169 @@
+openapi: 3.0.3
+info:
+  title: CTN - Customer Tracking & Notification
+  version: 1.0.0
+  description: |
+    Mengagregasi semua event dari RabbitMQ (OMS, WMS, SLS) menjadi
+    timeline pelacakan yang tersimpan di Redis. Implementasi EIP:
+    **Aggregator** + **Canonical Data Model**.
+
+    Data di Redis expire otomatis setelah 30 hari.
+servers:
+  - url: http://localhost:8004
+    description: Direct (development)
+  - url: http://localhost:8080
+    description: Via API Gateway
+tags:
+  - name: Pelacakan
+    description: Endpoint pelacakan pesanan pelanggan
+  - name: Monitoring
+    description: Health check
+
+paths:
+  /health:
+    get:
+      tags: [Monitoring]
+      summary: Health check CTN
+      responses:
+        '200':
+          description: Service aktif
+          content:
+            application/json:
+              example: { status: AKTIF, layanan: CTN }
+
+  /api/v1/pelacakan:
+    get:
+      tags: [Pelacakan]
+      summary: Daftar semua pesanan yang terlacak
+      description: Mengembalikan semua status pesanan dari Redis, diurutkan terbaru.
+      responses:
+        '200':
+          description: Daftar status pesanan
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DaftarPelacakanResponse' }
+
+  /api/v1/pelacakan/{id_pesanan}:
+    get:
+      tags: [Pelacakan]
+      summary: Status & timeline pelacakan pesanan
+      description: |
+        Mengembalikan status terkini dan timeline lengkap event untuk satu pesanan.
+        Data bersumber dari Redis (`status_pesanan:<id>` + `timeline_pesanan:<id>`).
+      parameters:
+        - name: id_pesanan
+          in: path
+          required: true
+          schema: { type: string }
+          example: PSN-20260613-A1B2C3
+      responses:
+        '200':
+          description: Data pelacakan ditemukan
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PelacakanDetailResponse' }
+              example:
+                id_pesanan: PSN-20260613-A1B2C3
+                status_terkini:
+                  id_pesanan: PSN-20260613-A1B2C3
+                  status: DALAM_PENGIRIMAN
+                  terakhir_diperbarui: "2026-06-13T12:30:00Z"
+                  sumber: SLS
+                  nomor_resi: "SLS-RESI-00012"
+                timeline:
+                  - status: PESANAN_DIBUAT
+                    tipe_event: pesanan.dibuat
+                    sumber: OMS
+                    waktu: "2026-06-13T10:00:00Z"
+                  - status: DIKEMAS
+                    tipe_event: gudang.dikemas
+                    sumber: WMS
+                    waktu: "2026-06-13T11:00:00Z"
+                  - status: DALAM_PENGIRIMAN
+                    tipe_event: pengiriman.dimanifes
+                    sumber: SLS
+                    waktu: "2026-06-13T12:30:00Z"
+                total_event: 3
+        '404':
+          description: Pesanan tidak ditemukan atau belum diproses
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+              example: { error: "Pesanan tidak ditemukan atau belum diproses" }
+
+  /api/v1/pelacakan/{id_pesanan}/timeline:
+    get:
+      tags: [Pelacakan]
+      summary: Timeline event saja (tanpa status terkini)
+      parameters:
+        - name: id_pesanan
+          in: path
+          required: true
+          schema: { type: string }
+          example: PSN-20260613-A1B2C3
+      responses:
+        '200':
+          description: Timeline event pesanan
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TimelineResponse' }
+        '404':
+          description: Timeline tidak ditemukan
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+components:
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        error: { type: string }
+
+    StatusTerkini:
+      type: object
+      description: Data status pesanan dari Redis hash
+      properties:
+        id_pesanan: { type: string }
+        status: { type: string }
+        terakhir_diperbarui: { type: string, format: date-time }
+        sumber: { type: string }
+        nomor_resi: { type: string }
+        id_pengiriman: { type: string }
+        id_gudang: { type: string }
+        estimated_delivery_date: { type: string }
+
+    EventTimeline:
+      type: object
+      properties:
+        status: { type: string }
+        tipe_event: { type: string }
+        sumber: { type: string }
+        waktu: { type: string, format: date-time }
+        metadata: { type: object }
+
+    PelacakanDetailResponse:
+      type: object
+      properties:
+        id_pesanan: { type: string }
+        status_terkini: { $ref: '#/components/schemas/StatusTerkini' }
+        timeline:
+          type: array
+          items: { $ref: '#/components/schemas/EventTimeline' }
+        total_event: { type: integer }
+
+    DaftarPelacakanResponse:
+      type: object
+      properties:
+        jumlah: { type: integer }
+        daftar_pesanan:
+          type: array
+          items: { $ref: '#/components/schemas/StatusTerkini' }
+
+    TimelineResponse:
+      type: object
+      properties:
+        id_pesanan: { type: string }
+        timeline:
+          type: array
+          items: { $ref: '#/components/schemas/EventTimeline' }

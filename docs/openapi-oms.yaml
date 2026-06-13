@@ -1,0 +1,287 @@
+openapi: 3.0.3
+info:
+  title: OMS - Order Management System
+  version: 1.0.0
+  description: |
+    Mengelola pembuatan dan pelacakan pesanan. Mempublikasikan event `pesanan.dibuat`
+    ke RabbitMQ exchange `logistics.events` saat pesanan baru dibuat.
+servers:
+  - url: http://localhost:8001
+    description: Direct (development)
+  - url: http://localhost:8080
+    description: Via API Gateway
+    variables: {}
+tags:
+  - name: Pesanan
+    description: Operasi manajemen pesanan
+  - name: Monitoring
+    description: Health check & statistik
+
+paths:
+  /health:
+    get:
+      tags: [Monitoring]
+      summary: Health check OMS
+      responses:
+        '200':
+          description: Service aktif
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HealthResponse' }
+              example: { status: AKTIF, layanan: OMS }
+
+  /statistik:
+    get:
+      tags: [Monitoring]
+      summary: Statistik ringkas pesanan
+      responses:
+        '200':
+          description: Statistik berhasil diambil
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StatistikOMS' }
+              example:
+                total_pesanan: 12
+                total_pendapatan: 2350000
+                pesanan_hari_ini: 3
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /pesanan:
+    post:
+      tags: [Pesanan]
+      summary: Buat pesanan baru
+      description: |
+        Menyimpan pesanan ke PostgreSQL dan mempublikasikan event `pesanan.dibuat`
+        ke RabbitMQ. Event diterima oleh WMS (via Transformer), SLS, dan CTN.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BuatPesananRequest' }
+            example:
+              pelanggan:
+                nama: Jane Doe
+                email: jane.doe@email.com
+              daftarBarang:
+                - sku: SKU-NEON-01
+                  qty: 2
+                - sku: SKU-NEON-02
+                  qty: 1
+              totalHarga: 450000
+              lokasi_pengambilan: "Gudang Jakarta Utara"
+              alamat_tujuan: "Jl. Sudirman No. 12, Jakarta Selatan"
+      responses:
+        '201':
+          description: Pesanan berhasil dibuat dan event dipublikasikan
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BuatPesananResponse' }
+        '400':
+          description: Data tidak lengkap
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+              example:
+                error: "Data tidak lengkap: pelanggan (nama, email), daftarBarang, totalHarga wajib diisi"
+        '500':
+          $ref: '#/components/responses/ServerError'
+    get:
+      tags: [Pesanan]
+      summary: Daftar semua pesanan
+      responses:
+        '200':
+          description: Daftar pesanan
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DaftarPesananResponse' }
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /pesanan/{id}:
+    get:
+      tags: [Pesanan]
+      summary: Detail pesanan by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          example: PSN-20260613-A1B2C3
+      responses:
+        '200':
+          description: Detail pesanan
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DetailPesanan' }
+        '404':
+          description: Pesanan tidak ditemukan
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+              example: { error: Pesanan tidak ditemukan }
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /pesanan/{id}/status:
+    patch:
+      tags: [Pesanan]
+      summary: Update status pesanan manual
+      description: Update status pesanan dan publish event `pesanan.diupdate` ke RabbitMQ.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          example: PSN-20260613-A1B2C3
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [DIBUAT, DIPROSES, DIKIRIM, DALAM_PERJALANAN, SELESAI, DIBATALKAN]
+                  example: DIKIRIM
+      responses:
+        '200':
+          description: Status berhasil diperbarui
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  pesan: { type: string }
+                  data: { $ref: '#/components/schemas/DetailPesanan' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /orders:
+    get:
+      tags: [Pesanan]
+      summary: "Alias: Daftar pesanan (backward compat)"
+      description: Alias dari `GET /pesanan`. Digunakan oleh dashboard.
+      responses:
+        '200':
+          description: Daftar pesanan
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DaftarPesananResponse' }
+
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      properties:
+        status: { type: string, example: AKTIF }
+        layanan: { type: string, example: OMS }
+
+    ErrorResponse:
+      type: object
+      properties:
+        error: { type: string }
+        detail: { type: string }
+
+    StatistikOMS:
+      type: object
+      properties:
+        total_pesanan: { type: integer, example: 12 }
+        total_pendapatan: { type: number, example: 2350000 }
+        pesanan_hari_ini: { type: integer, example: 3 }
+
+    ItemPesanan:
+      type: object
+      required: [sku, qty]
+      properties:
+        sku: { type: string, example: SKU-NEON-01 }
+        qty: { type: integer, example: 2 }
+
+    InfoPelanggan:
+      type: object
+      required: [nama, email]
+      properties:
+        nama: { type: string, example: Jane Doe }
+        email: { type: string, format: email, example: jane.doe@email.com }
+
+    BuatPesananRequest:
+      type: object
+      required: [pelanggan, daftarBarang, totalHarga, lokasi_pengambilan, alamat_tujuan]
+      properties:
+        pelanggan: { $ref: '#/components/schemas/InfoPelanggan' }
+        daftarBarang:
+          type: array
+          items: { $ref: '#/components/schemas/ItemPesanan' }
+        totalHarga: { type: number, example: 450000 }
+        lokasi_pengambilan: { type: string, example: "Gudang Jakarta Utara" }
+        alamat_tujuan: { type: string, example: "Jl. Sudirman No. 12, Jakarta Selatan" }
+
+    BuatPesananResponse:
+      type: object
+      properties:
+        pesan: { type: string, example: "Pesanan berhasil dibuat dan event dipublikasikan" }
+        id_pesanan: { type: string, example: PSN-20260613-A1B2C3 }
+        data:
+          type: object
+          properties:
+            id_pesanan: { type: string }
+            pelanggan: { $ref: '#/components/schemas/InfoPelanggan' }
+            daftar_barang:
+              type: array
+              items: { $ref: '#/components/schemas/ItemPesanan' }
+            total_harga: { type: number }
+            lokasi_pengambilan: { type: string }
+            alamat_tujuan: { type: string }
+            waktu: { type: string, format: date-time }
+            tipe_event: { type: string, example: pesanan.dibuat }
+            sumber: { type: string, example: OMS }
+            id_pesan: { type: string, format: uuid }
+
+    DetailPesanan:
+      type: object
+      properties:
+        id_pesanan: { type: string, example: PSN-20260613-A1B2C3 }
+        nama_pelanggan: { type: string }
+        email_pelanggan: { type: string }
+        daftar_barang:
+          type: array
+          items: { $ref: '#/components/schemas/ItemPesanan' }
+        total_harga: { type: number }
+        lokasi_pengambilan: { type: string }
+        alamat_tujuan: { type: string }
+        status:
+          type: string
+          enum: [DIBUAT, DIPROSES, DIKIRIM, DALAM_PERJALANAN, SELESAI, DIBATALKAN]
+        dibuat_pada: { type: string, format: date-time }
+        diperbarui_pada: { type: string, format: date-time }
+
+    DaftarPesananResponse:
+      type: object
+      properties:
+        jumlah: { type: integer }
+        daftar_pesanan:
+          type: array
+          items: { $ref: '#/components/schemas/DetailPesanan' }
+
+  responses:
+    BadRequest:
+      description: Request tidak valid
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    NotFound:
+      description: Resource tidak ditemukan
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    ServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }

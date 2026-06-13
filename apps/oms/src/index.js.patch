@@ -1,0 +1,11 @@
+--- a/apps/oms/src/index.js
++++ b/apps/oms/src/index.js
+@@ Adds GET /orders alias for backward compatibility with dashboard @@
++aplikasi.get('/orders', async (req, res) => {
++  try {
++    const hasil = await koneksiDb.query('SELECT * FROM pesanan ORDER BY dibuat_pada DESC');
++    res.json({ jumlah: hasil.rows.length, daftar_pesanan: hasil.rows });
++  } catch (err) {
++    res.status(500).json({ error: err.message });
++  }
++});

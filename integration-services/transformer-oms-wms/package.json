@@ -1,0 +1,14 @@
+{
+  "name": "edlie-transformer-oms-wms",
+  "version": "1.0.0",
+  "description": "EIP Message Translator: JSON (OMS) -> XML (WMS)",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "amqplib": "^0.10.3",
+    "axios": "^1.6.2",
+    "xmlbuilder2": "^3.1.1"
+  }
+}

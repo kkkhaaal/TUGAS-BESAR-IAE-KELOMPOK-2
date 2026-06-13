@@ -1,0 +1,301 @@
+openapi: 3.0.3
+info:
+  title: SLS - Shipping & Logistics System
+  version: 1.0.0
+  description: |
+    Mengelola data pengiriman. Konsumsi event `gudang.dikemas` dari RabbitMQ
+    untuk membuat record pengiriman baru. Operator dapat mengupdate status
+    pengiriman secara manual via PATCH endpoint, yang akan memicu event
+    baru ke RabbitMQ (`pengiriman.pickup`, `pengiriman.in_transit`, dll).
+servers:
+  - url: http://localhost:8003
+    description: Direct (development)
+  - url: http://localhost:8080
+    description: Via API Gateway
+tags:
+  - name: Pengiriman
+    description: Operasi manajemen pengiriman
+  - name: Monitoring
+    description: Health check, statistik & server time
+
+paths:
+  /health:
+    get:
+      tags: [Monitoring]
+      summary: Health check SLS
+      responses:
+        '200':
+          description: Service aktif
+          content:
+            application/json:
+              example: { status: AKTIF, layanan: SLS }
+
+  /api/v1/statistik:
+    get:
+      tags: [Monitoring]
+      summary: Statistik pengiriman per status
+      responses:
+        '200':
+          description: Statistik berhasil diambil
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StatistikSLS' }
+
+  /api/v1/server-time:
+    get:
+      tags: [Monitoring]
+      summary: Waktu server (source of truth untuk ETA)
+      responses:
+        '200':
+          description: Waktu server saat ini
+          content:
+            application/json:
+              example: { server_time: "2026-06-13T10:00:00.000Z" }
+
+  /api/v1/pengiriman:
+    get:
+      tags: [Pengiriman]
+      summary: Daftar semua pengiriman
+      responses:
+        '200':
+          description: Daftar pengiriman dari MongoDB
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DaftarPengirimanResponse' }
+
+  /api/v1/pengiriman/{id_pesanan}:
+    get:
+      tags: [Pengiriman]
+      summary: Cari pengiriman by ID pesanan (OMS)
+      parameters:
+        - name: id_pesanan
+          in: path
+          required: true
+          schema: { type: string }
+          example: PSN-20260613-A1B2C3
+      responses:
+        '200':
+          description: Data pengiriman ditemukan
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Pengiriman' }
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/pengiriman/detail/{id_pengiriman}:
+    get:
+      tags: [Pengiriman]
+      summary: Cari pengiriman by ID pengiriman (SLS)
+      parameters:
+        - name: id_pengiriman
+          in: path
+          required: true
+          schema: { type: string }
+          example: SLS-SHIP-00001
+      responses:
+        '200':
+          description: Data pengiriman ditemukan
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Pengiriman' }
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/pengiriman/{id_pengiriman}/status:
+    patch:
+      tags: [Pengiriman]
+      summary: Update status pengiriman (operator)
+      description: |
+        Update status pengiriman secara manual. Urutan status yang valid:
+        `DIMANIFES` → `PICKUP` → `IN TRANSIT` → `DELIVERED` (atau `CANCELLED` kapanpun).
+
+        Setiap update akan mempublikasikan event ke RabbitMQ:
+        - `PICKUP` → `pengiriman.pickup`
+        - `IN TRANSIT` → `pengiriman.in_transit`
+        - `DELIVERED` → `pengiriman.delivered`
+        - `CANCELLED` → `pengiriman.cancelled`
+      parameters:
+        - name: id_pengiriman
+          in: path
+          required: true
+          schema: { type: string }
+          example: SLS-SHIP-00001
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateStatusRequest' }
+            examples:
+              pickup:
+                summary: Set status PICKUP
+                value: { status: PICKUP, operator: "Op. Budi" }
+              in_transit:
+                summary: Set status IN TRANSIT
+                value: { status: "IN TRANSIT", operator: "Op. Budi" }
+              delivered:
+                summary: Set status DELIVERED
+                value: { status: DELIVERED, operator: "Op. Budi" }
+              cancelled:
+                summary: Batalkan pengiriman
+                value: { status: CANCELLED, operator: "Op. Budi" }
+      responses:
+        '200':
+          description: Status berhasil diubah
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UpdateStatusResponse' }
+        '400':
+          description: Status tidak valid atau urutan salah
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+              example: { error: "Transisi status tidak valid: DIMANIFES → DELIVERED" }
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /api/v1/pengiriman/{id_pengiriman}/jadwal:
+    patch:
+      tags: [Pengiriman]
+      summary: Set jadwal tanggal pickup
+      parameters:
+        - name: id_pengiriman
+          in: path
+          required: true
+          schema: { type: string }
+          example: SLS-SHIP-00001
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                scheduled_pickup_date:
+                  type: string
+                  format: date-time
+                  example: "2026-06-15T08:00:00.000Z"
+            example: { scheduled_pickup_date: "2026-06-15T08:00:00.000Z" }
+      responses:
+        '200':
+          description: Jadwal berhasil diset
+          content:
+            application/json:
+              example:
+                pesan: "Jadwal pengiriman berhasil diset"
+                scheduled_pickup_date: "2026-06-15T08:00:00.000Z"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/shipments:
+    get:
+      tags: [Pengiriman]
+      summary: "Alias: Daftar pengiriman (backward compat)"
+      responses:
+        '200':
+          description: Sama dengan /api/v1/pengiriman
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DaftarPengirimanResponse' }
+
+components:
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        error: { type: string }
+
+    StatistikSLS:
+      type: object
+      properties:
+        total_pengiriman: { type: integer }
+        total_dimanifes: { type: integer }
+        total_pickup: { type: integer }
+        total_in_transit: { type: integer }
+        total_delivered: { type: integer }
+        total_cancelled: { type: integer }
+
+    DetailPaket:
+      type: object
+      properties:
+        nomor_referensi: { type: string, description: ID Pesanan dari OMS }
+        daftar_barang: { type: array, items: { type: object } }
+        nilai_barang: { type: number }
+        lokasi_pengambilan: { type: string }
+        alamat_tujuan: { type: string }
+
+    RiwayatStatus:
+      type: object
+      properties:
+        status: { type: string }
+        waktu: { type: string, format: date-time }
+        oleh: { type: string }
+        keterangan: { type: string }
+
+    Pengiriman:
+      type: object
+      properties:
+        id_pengiriman: { type: string, example: SLS-SHIP-00001 }
+        nomor_resi: { type: string }
+        status:
+          type: string
+          enum: [DIMANIFES, PICKUP, IN TRANSIT, DELIVERED, CANCELLED]
+        detail_paket: { $ref: '#/components/schemas/DetailPaket' }
+        scheduled_pickup_date: { type: string, format: date-time, nullable: true }
+        delivered_at: { type: string, format: date-time, nullable: true }
+        cancelled_at: { type: string, format: date-time, nullable: true }
+        riwayat_status:
+          type: array
+          items: { $ref: '#/components/schemas/RiwayatStatus' }
+        dibuat_pada: { type: string, format: date-time }
+        diperbarui_pada: { type: string, format: date-time }
+
+    DaftarPengirimanResponse:
+      type: object
+      properties:
+        jumlah: { type: integer }
+        daftar_pengiriman:
+          type: array
+          items: { $ref: '#/components/schemas/Pengiriman' }
+
+    UpdateStatusRequest:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [DIMANIFES, PICKUP, IN TRANSIT, DELIVERED, CANCELLED]
+        scheduled_pickup_date:
+          type: string
+          format: date-time
+          nullable: true
+        operator:
+          type: string
+          example: Op. Budi
+
+    UpdateStatusResponse:
+      type: object
+      properties:
+        pesan: { type: string }
+        pengiriman: { $ref: '#/components/schemas/Pengiriman' }
+        event_dipublikasikan: { type: string, nullable: true }
+
+  responses:
+    BadRequest:
+      description: Request tidak valid
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    NotFound:
+      description: Resource tidak ditemukan
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    ServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
