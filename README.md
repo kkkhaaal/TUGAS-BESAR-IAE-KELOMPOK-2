@@ -5,13 +5,6 @@
 **Kelompok 2 — Universitas Telkom 2026**
 
 ---
-# EDLIE — Enterprise Logistics Integration Engine
-
-> **Event-Driven Logistics Integration** menggunakan RabbitMQ, Microservices, dan Enterprise Integration Patterns (EIP)
-
-**Kelompok 2 — Universitas Telkom 2026**
-
----
 
 ## Deskripsi Sistem
 
